@@ -1,0 +1,51 @@
+name: Build Dev Image
+
+on:
+  push:
+    branches:
+      - "dev/v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  main:
+    name: Prepare branch /ref/heads/rc
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Set outputs
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up git
+        run: |
+          git config --global user.email "${GITHUB_ACTOR}"
+          git config --global user.name "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Rebase dev branch with /ref/heads/rc
+        run: |
+          git status
+          git pull --rebase origin rc
+          if [[ `git status --porcelain` ]]; then
+            echo "OK: Changes detected."
+            git commit -m "chore: rebase with rc (${{ steps.vars.outputs.sha_short }})"
+            git push --force origin ${{ github.ref }}
+          else
+            echo "WARNING: No changes were detected."
+          fi
+
+      - name: Merge dev branch to /ref/heads/rc
+        run: |
+          git status
+          git pull
+          git checkout rc
+          git status
+          git merge --squash ${{ github.ref }}
+          git commit -m "chore: merge branch (${{ github.ref }}) (${{ steps.vars.outputs.sha_short }})"
+          git push --force origin rc
